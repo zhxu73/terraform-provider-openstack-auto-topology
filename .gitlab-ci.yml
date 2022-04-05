@@ -1,0 +1,36 @@
+image: "golang:1.16-stretch"
+
+stages:
+  - format-lint
+  - test
+  - release
+
+format:
+  stage: format-lint
+  needs: []
+  script:
+    - cd $CI_PROJECT_DIR
+    - gofmt -s -l -d . | tee /tmp/format_output.txt
+    - test $(cat /tmp/format_output.txt | wc -l) -eq 0
+
+lint:
+  stage: format-lint
+  needs: []
+  before_script:
+    - go get golang.org/x/lint/golint
+    - go get github.com/gordonklaus/ineffassign
+    - go install github.com/gordonklaus/ineffassign
+    - go get github.com/client9/misspell/cmd/misspell
+  script:
+    - cd $CI_PROJECT_DIR
+    - golint ./...
+    - ineffassign .
+    - misspell -error .
+
+test:
+  stage: test
+  needs: [lint]
+  script:
+    - cd $CI_PROJECT_DIR
+    - go test -v -covermode=count
+    - make install

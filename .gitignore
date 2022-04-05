@@ -1,0 +1,7 @@
+.idea
+.vscode
+.terraform
+.terraform.lock.hcl
+terraform.tfstate*
+openstack-auto-allocated-topology
+terraform-provider-openstack-auto-topology
