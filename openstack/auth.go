@@ -98,8 +98,7 @@ func makeAuthRequest(baseURL string, payload map[string]interface{}) (token stri
 	if err != nil {
 		return "", TokenMetadata{}, err
 	}
-	client := getHTTPClient()
-	resp, err := client.Do(req)
+	resp, err := makeHTTPRequestWithRetry(req)
 	if err != nil {
 		return "", TokenMetadata{}, err
 	}

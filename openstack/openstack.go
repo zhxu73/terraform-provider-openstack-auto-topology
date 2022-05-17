@@ -139,8 +139,7 @@ func makeRequest(httpMethod string, url string, token string, body io.Reader) (*
 		return nil, err
 	}
 	req.Header.Set("X-Auth-Token", token)
-	client := getHTTPClient()
-	resp, err := client.Do(req)
+	resp, err := makeHTTPRequestWithRetry(req)
 	if err != nil {
 		return resp, err
 	}
@@ -148,6 +147,26 @@ func makeRequest(httpMethod string, url string, token string, body io.Reader) (*
 		return resp, fmt.Errorf("%s, %s", resp.Status, url)
 	}
 	return resp, nil
+}
+
+func makeHTTPRequestWithRetry(req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+	const maxRetryCount = 3
+
+	client := getHTTPClient()
+	for i := 0; i < maxRetryCount; i++ {
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode >= 400 {
+			time.Sleep(time.Millisecond * 500 * time.Duration(i)) // exp backoff
+			continue
+		}
+		break
+	}
+	return resp, err
 }
 
 func getHTTPClient() *http.Client {
