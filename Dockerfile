@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.16 as build
+FROM golang:1.18 as build
 WORKDIR /terraform-provider-openstack-auto-topology
 COPY ./openstack/ /terraform-provider-openstack-auto-topology/openstack/
 COPY ./provider/ /terraform-provider-openstack-auto-topology/provider/
