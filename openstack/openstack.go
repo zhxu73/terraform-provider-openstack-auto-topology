@@ -88,12 +88,16 @@ func (c *Client) getCatalog(baseURL string, token string) ([]CatalogEntry, error
 	return respBody.Catalog, nil
 }
 
-// Network returns a NetworkClient
-func (c Client) Network() (*NetworkClient, error) {
+// Network returns a NetworkClient for a region.
+// If regionName parameter is empty (""), then you will try to use OS_REGION_NAME from application credential.
+func (c Client) Network(regionName string) (*NetworkClient, error) {
 	if c.token == "" {
 		return nil, fmt.Errorf("token not set")
 	}
-	networkEndpoint, err := findEndpoint(c.catalogEntries, "network", c.appCred.RegionName, c.appCred.Interface)
+	if regionName == "" {
+		regionName = c.appCred.RegionName
+	}
+	networkEndpoint, err := findEndpoint(c.catalogEntries, "network", regionName, c.appCred.Interface)
 	if err != nil {
 		return nil, err
 	}
