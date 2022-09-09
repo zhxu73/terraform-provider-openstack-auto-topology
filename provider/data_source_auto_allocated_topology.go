@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"gitlab.com/cyverse/openstack-auto-allocated-topology/openstack"
@@ -46,24 +47,27 @@ func dataSourceAutoAllocatedTopologyRead(ctx context.Context, d *schema.Resource
 
 	networkClient, err := osClient.Network(getRegionNameFromResourceData(d))
 	if err != nil {
-		return diag.FromErr(err)
+		return addErrorDiagnostic(diags, err)
 	}
 	projectID := getProjectID(d, &osClient)
+	if projectID == "" {
+		return addErrorDiagnostic(diags, fmt.Errorf("cannot obtain project ID"))
+	}
 	topology, err := networkClient.GetAutoAllocatedTopology(projectID)
 	if err != nil {
-		return diag.FromErr(err)
+		return addErrorDiagnostic(diags, err)
 	}
 	if topology == nil {
-		panic("topology is nil")
+		return addErrorDiagnostic(diags, fmt.Errorf("topology is nil"))
 	}
 
 	err = d.Set("id", topology.NetworkID)
 	if err != nil {
-		return diag.FromErr(err)
+		return addErrorDiagnostic(diags, err)
 	}
 	err = d.Set("project_id", topology.ProjectID)
 	if err != nil {
-		return diag.FromErr(err)
+		return addErrorDiagnostic(diags, err)
 	}
 	d.SetId(topology.NetworkID)
 
@@ -115,4 +119,12 @@ func getRegionNameFromResourceData(d *schema.ResourceData) string {
 		return ""
 	}
 	return regionName
+}
+
+func addDiagnostic(diags diag.Diagnostics, diag2 diag.Diagnostic) diag.Diagnostics {
+	return append(diags, diag2)
+}
+
+func addErrorDiagnostic(diags diag.Diagnostics, err error) diag.Diagnostics {
+	return append(diags, diag.FromErr(err)...)
 }
