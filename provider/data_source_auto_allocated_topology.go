@@ -8,28 +8,35 @@ import (
 	"gitlab.com/cyverse/openstack-auto-allocated-topology/openstack"
 )
 
+const (
+	topologyIDAttribute  = "id"
+	projectIDAttribute   = "project_id"
+	projectNameAttribute = "project_name"
+	regionNameAttribute  = "region_name"
+)
+
 func dataSourceAutoAllocatedTopology() *schema.Resource {
 	return &schema.Resource{
 		Description:   "Use this data source to get the auto allocated topology of current project",
 		ReadContext:   dataSourceAutoAllocatedTopologyRead,
 		SchemaVersion: 1,
 		Schema: map[string]*schema.Schema{
-			"id": {
+			topologyIDAttribute: {
 				Type:        schema.TypeString,
 				Computed:    true,
 				Description: "network ID of the auto allocated topology",
 			},
-			"project_id": {
+			projectIDAttribute: {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "project ID of the auto allocated topology",
 			},
-			"project_name": {
+			projectNameAttribute: {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "project name of the auto allocated topology",
 			},
-			"region_name": {
+			regionNameAttribute: {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "region name of the auto allocated topology",
@@ -61,11 +68,11 @@ func dataSourceAutoAllocatedTopologyRead(ctx context.Context, d *schema.Resource
 		return addErrorDiagnostic(diags, fmt.Errorf("topology is nil"))
 	}
 
-	err = d.Set("id", topology.NetworkID)
+	err = d.Set(topologyIDAttribute, topology.NetworkID)
 	if err != nil {
 		return addErrorDiagnostic(diags, err)
 	}
-	err = d.Set("project_id", topology.ProjectID)
+	err = d.Set(projectIDAttribute, topology.ProjectID)
 	if err != nil {
 		return addErrorDiagnostic(diags, err)
 	}
@@ -95,7 +102,7 @@ func getProjectID(d *schema.ResourceData, osClient *openstack.Client) string {
 }
 
 func getProjectIDFromResourceData(d *schema.ResourceData) string {
-	raw := d.Get("project_id")
+	raw := d.Get(projectIDAttribute)
 	projectID, ok := raw.(string)
 	if !ok {
 		return ""
@@ -104,7 +111,7 @@ func getProjectIDFromResourceData(d *schema.ResourceData) string {
 }
 
 func getProjectNameFromResourceData(d *schema.ResourceData) string {
-	raw := d.Get("project_name")
+	raw := d.Get(projectNameAttribute)
 	projectName, ok := raw.(string)
 	if !ok {
 		return ""
@@ -113,7 +120,7 @@ func getProjectNameFromResourceData(d *schema.ResourceData) string {
 }
 
 func getRegionNameFromResourceData(d *schema.ResourceData) string {
-	regionNameRaw := d.Get("region_name")
+	regionNameRaw := d.Get(regionNameAttribute)
 	regionName, ok := regionNameRaw.(string)
 	if !ok {
 		return ""
