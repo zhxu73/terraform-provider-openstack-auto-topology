@@ -113,6 +113,51 @@ func (c *Client) CurrentProject() (id string, name string) {
 	return c.tokenMetadata.Project.ID, c.tokenMetadata.Project.Name
 }
 
+// LookupProjectByName looks up the ID of a project by its name
+func (c *Client) LookupProjectByName(projectName string) (id string) {
+	url, err := neturl.Parse(c.appCred.AuthURL)
+	if err != nil {
+		return ""
+	}
+	url.Path = path.Join(url.Path, "users", c.tokenMetadata.User.ID, "projects")
+	resp, err := makeRequest(http.MethodGet, url.String(), c.token, nil)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var respBody struct {
+		Projects []struct {
+			ID          string                 `json:"id"`
+			Name        string                 `json:"name"`
+			DomainID    string                 `json:"domain_id"`
+			Description string                 `json:"description"`
+			Enabled     bool                   `json:"enabled"`
+			ParentID    string                 `json:"parent_id"`
+			IsDomain    bool                   `json:"is_domain"`
+			Tags        []string               `json:"tags"`
+			Options     map[string]interface{} `json:"options"`
+			Links       struct {
+				Self string `json:"self"`
+			} `json:"links"`
+		} `json:"projects"`
+		Links struct {
+			Next     interface{} `json:"next"`
+			Self     string      `json:"self"`
+			Previous interface{} `json:"previous"`
+		} `json:"links"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	if err != nil {
+		return ""
+	}
+	for _, project := range respBody.Projects {
+		if project.Name == projectName {
+			return project.ID
+		}
+	}
+	return ""
+}
+
 func findEndpoint(catalogEntries []CatalogEntry, serviceType, regionName, interfaceName string) (CatalogEndpoint, error) {
 	var serviceEntry CatalogEntry
 	for _, entry := range catalogEntries {

@@ -23,6 +23,11 @@ func dataSourceAutoAllocatedTopology() *schema.Resource {
 				Optional:    true,
 				Description: "project ID of the auto allocated topology",
 			},
+			"project_name": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "project name of the auto allocated topology",
+			},
 			"region_name": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -43,7 +48,7 @@ func dataSourceAutoAllocatedTopologyRead(ctx context.Context, d *schema.Resource
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	projectID, _ := osClient.CurrentProject()
+	projectID := getProjectID(d, &osClient)
 	topology, err := networkClient.GetAutoAllocatedTopology(projectID)
 	if err != nil {
 		return diag.FromErr(err)
@@ -63,6 +68,44 @@ func dataSourceAutoAllocatedTopologyRead(ctx context.Context, d *schema.Resource
 	d.SetId(topology.NetworkID)
 
 	return diags
+}
+
+// Look up project ID use the following hierarchy:
+// - project_id if user specified it
+// - project_name if user specified it
+// - current project associated with the credential, which may not exists (e.g. unscoped credential)
+func getProjectID(d *schema.ResourceData, osClient *openstack.Client) string {
+	projectID := getProjectIDFromResourceData(d)
+	if projectID != "" {
+		return projectID
+	}
+	projectName := getProjectNameFromResourceData(d)
+	if projectName != "" {
+		projectID = osClient.LookupProjectByName(projectName)
+		if projectID != "" {
+			return projectID
+		}
+	}
+	projectID, _ = osClient.CurrentProject()
+	return projectID
+}
+
+func getProjectIDFromResourceData(d *schema.ResourceData) string {
+	raw := d.Get("project_id")
+	projectID, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return projectID
+}
+
+func getProjectNameFromResourceData(d *schema.ResourceData) string {
+	raw := d.Get("project_name")
+	projectName, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return projectName
 }
 
 func getRegionNameFromResourceData(d *schema.ResourceData) string {
