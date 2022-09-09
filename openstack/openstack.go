@@ -69,6 +69,7 @@ func (c *Client) getCatalog(baseURL string, token string) ([]CatalogEntry, error
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	var respBody struct {
 		Catalog []CatalogEntry `json:"catalog"`
 		Links   struct {
@@ -81,7 +82,6 @@ func (c *Client) getCatalog(baseURL string, token string) ([]CatalogEntry, error
 	if err != nil {
 		return nil, err
 	}
-	resp.Body.Close()
 	if len(respBody.Catalog) == 0 {
 		return nil, fmt.Errorf("no catalog entries")
 	}
@@ -90,7 +90,7 @@ func (c *Client) getCatalog(baseURL string, token string) ([]CatalogEntry, error
 
 // Network returns a NetworkClient for a region.
 // If regionName parameter is empty (""), then you will try to use OS_REGION_NAME from application credential.
-func (c Client) Network(regionName string) (*NetworkClient, error) {
+func (c *Client) Network(regionName string) (*NetworkClient, error) {
 	if c.token == "" {
 		return nil, fmt.Errorf("token not set")
 	}
@@ -109,7 +109,7 @@ func (c Client) Network(regionName string) (*NetworkClient, error) {
 }
 
 // CurrentProject returns the current project (project of application credential used for authentication)
-func (c Client) CurrentProject() (id string, name string) {
+func (c *Client) CurrentProject() (id string, name string) {
 	return c.tokenMetadata.Project.ID, c.tokenMetadata.Project.Name
 }
 
