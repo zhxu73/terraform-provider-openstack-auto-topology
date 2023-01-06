@@ -13,8 +13,10 @@ import (
 // New -
 func New() *schema.Provider {
 	return &schema.Provider{
-		Schema:       map[string]*schema.Schema{},
-		ResourcesMap: map[string]*schema.Resource{},
+		Schema: map[string]*schema.Schema{},
+		ResourcesMap: map[string]*schema.Resource{
+			"openstack-auto-topology_auto_allocated_topology": resourceAutoAllocatedTopology(),
+		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"openstack-auto-topology_auto_allocated_topology": dataSourceAutoAllocatedTopology(),
 		},

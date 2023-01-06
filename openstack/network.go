@@ -1,6 +1,7 @@
 package openstack
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,7 +19,7 @@ type NetworkClient struct {
 func (c NetworkClient) GetAutoAllocatedTopology(projectID string) (*AutoAllocatedTopology, error) {
 
 	url := fmt.Sprintf("%s/v2.0/auto-allocated-topology/%s", c.baseURL, projectID)
-	resp, err := makeRequest(http.MethodGet, url, c.token, nil)
+	resp, err := makeRequest(http.MethodGet, url, c.token, nil, []int{200})
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +40,24 @@ func (c NetworkClient) GetAutoAllocatedTopology(projectID string) (*AutoAllocate
 		NetworkID: respBody.Topology.ID,
 		ProjectID: projectID,
 	}, nil
+}
+
+// DeleteAutoAllocatedTopology deletes the auto allocated topology for a project.
+// https://docs.openstack.org/api-ref/network/v2/?expanded=delete-the-auto-allocated-topology-detail#show-auto-allocated-topology-details
+func (c NetworkClient) DeleteAutoAllocatedTopology(projectID string) error {
+
+	url := fmt.Sprintf("%s/v2.0/auto-allocated-topology/%s", c.baseURL, projectID)
+	resp, err := makeRequest(http.MethodDelete, url, c.token, nil, []int{200, 204})
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
 }
 
 // AutoAllocatedTopology is network (and related entities) that created by openstack via the auto allocated topology extension

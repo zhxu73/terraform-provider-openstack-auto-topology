@@ -185,7 +185,7 @@ func findEndpoint(catalogEntries []CatalogEntry, serviceType, regionName, interf
 	return serviceEndpoint, nil
 }
 
-func makeRequest(httpMethod string, url string, token string, body io.Reader) (*http.Response, error) {
+func makeRequest(httpMethod string, url string, token string, body io.Reader, successStatusCodes []int) (*http.Response, error) {
 	req, err := http.NewRequest(httpMethod, url, body)
 	if err != nil {
 		return nil, err
@@ -195,10 +195,12 @@ func makeRequest(httpMethod string, url string, token string, body io.Reader) (*
 	if err != nil {
 		return resp, err
 	}
-	if resp.StatusCode != 200 {
-		return resp, fmt.Errorf("%s, %s", resp.Status, url)
+	for _, code := range successStatusCodes {
+		if code == resp.StatusCode {
+			return resp, nil
+		}
 	}
-	return resp, nil
+	return resp, fmt.Errorf("%s, %s", resp.Status, url)
 }
 
 func makeHTTPRequestWithRetry(req *http.Request) (*http.Response, error) {
