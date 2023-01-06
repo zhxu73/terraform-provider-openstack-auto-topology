@@ -1,6 +1,7 @@
 package openstack
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
@@ -200,7 +201,13 @@ func makeRequest(httpMethod string, url string, token string, body io.Reader, su
 			return resp, nil
 		}
 	}
-	return resp, fmt.Errorf("%s, %s", resp.Status, url)
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return resp, fmt.Errorf("%s, %s, %s", resp.Status, url, buf.String())
 }
 
 func makeHTTPRequestWithRetry(req *http.Request) (*http.Response, error) {
