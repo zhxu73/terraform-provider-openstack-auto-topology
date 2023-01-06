@@ -7,6 +7,7 @@ import (
 	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/identity/v3/catalog"
 	"github.com/gophercloud/gophercloud/openstack/identity/v3/users"
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/networks"
 	"github.com/mitchellh/mapstructure"
 	"io"
 	"net/http"
@@ -130,6 +131,22 @@ func (c *Client) LookupProjectByName(projectName string) (id string, err error) 
 		}
 	}
 	return "", fmt.Errorf("project %s not found", projectName)
+}
+
+func (c *Client) LookupNetworkName(regionName, networkID string) (name string, err error) {
+	networkClient, err := openstack.NewNetworkV2(c.provider, gophercloud.EndpointOpts{Region: regionName})
+	if err != nil {
+		return "", err
+	}
+	result := networks.Get(networkClient, networkID)
+	if result.Err != nil {
+		return "", result.Err
+	}
+	network, err := result.Extract()
+	if err != nil {
+		return "", err
+	}
+	return network.Name, nil
 }
 
 func findNeutronCatalogEntry(identityClient *gophercloud.ServiceClient, regionName, interfaceName string) (CatalogEndpoint, error) {

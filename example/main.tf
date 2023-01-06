@@ -19,10 +19,10 @@ data "openstack-auto-topology_auto_allocated_topology" "network" {
     # project_name = "MY_PROJECT_NAME" # you can override the project name
 }
 
-# you can also declare as resource, this will delete auto_allocated_topology when running `terraform destroy`
-resource "openstack-auto-topology_auto_allocated_topology" "network" {
-}
-
 output "network_id" {
   value = data.openstack-auto-topology_auto_allocated_topology.network.id
+}
+
+output "network_name" {
+  value = data.openstack-auto-topology_auto_allocated_topology.network.name
 }

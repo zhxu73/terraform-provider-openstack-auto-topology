@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	topologyIDAttribute  = "id"
-	projectIDAttribute   = "project_id"
-	projectNameAttribute = "project_name"
-	regionNameAttribute  = "region_name"
+	topologyIDAttribute   = "id"
+	topologyNameAttribute = "name"
+	projectIDAttribute    = "project_id"
+	projectNameAttribute  = "project_name"
+	regionNameAttribute   = "region_name"
 )
 
 var autoAllocatedTopologySchema = map[string]*schema.Schema{
@@ -20,6 +21,11 @@ var autoAllocatedTopologySchema = map[string]*schema.Schema{
 		Type:        schema.TypeString,
 		Computed:    true,
 		Description: "network ID of the auto allocated topology",
+	},
+	topologyNameAttribute: {
+		Type:        schema.TypeString,
+		Computed:    true,
+		Description: "network name of the auto allocated topology",
 	},
 	projectIDAttribute: {
 		Type:        schema.TypeString,
@@ -73,8 +79,16 @@ func dataSourceAutoAllocatedTopologyRead(ctx context.Context, d *schema.Resource
 	if topology == nil {
 		return addErrorDiagnostic(diags, fmt.Errorf("topology is nil"))
 	}
+	networkName, err := osClient.LookupNetworkName(regionName, topology.NetworkID)
+	if err != nil {
+		return addErrorDiagnostic(diags, err)
+	}
 
 	err = d.Set(topologyIDAttribute, topology.NetworkID)
+	if err != nil {
+		return addErrorDiagnostic(diags, err)
+	}
+	err = d.Set(topologyNameAttribute, networkName)
 	if err != nil {
 		return addErrorDiagnostic(diags, err)
 	}
