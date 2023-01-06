@@ -1,19 +1,16 @@
 package openstack
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	neturl "net/url"
-	"path"
+	"github.com/gophercloud/gophercloud"
+	"github.com/gophercloud/gophercloud/openstack"
+	tokensv3 "github.com/gophercloud/gophercloud/openstack/identity/v3/tokens"
 	"time"
 )
 
-// ApplicationCredential is env vars for .openrc for application credential
-type ApplicationCredential struct {
+// CredentialEnv is env vars for .openrc for openstack credential
+type CredentialEnv struct {
 	RegionName                  string `envconfig:"OS_REGION_NAME"`
-	Interface                   string `envconfig:"OS_INTERFACE"`
+	Interface                   string `envconfig:"OS_INTERFACE" default:"public"`
 	AuthURL                     string `envconfig:"OS_AUTH_URL"`
 	ApplicationCredentialSecret string `envconfig:"OS_APPLICATION_CREDENTIAL_SECRET"`
 	ApplicationCredentialID     string `envconfig:"OS_APPLICATION_CREDENTIAL_ID"`
@@ -23,116 +20,119 @@ type ApplicationCredential struct {
 
 // TokenMetadata is the data returned in HTTP response body when obtaining token
 type TokenMetadata struct {
-	IsDomain bool     `json:"is_domain"`
-	Methods  []string `json:"methods"`
-	Roles    []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"roles"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Project   struct {
-		Domain struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"domain"`
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"project"`
-	Catalog []struct {
-		Endpoints []struct {
-			RegionID  string `json:"region_id"`
-			URL       string `json:"url"`
-			Region    string `json:"region"`
-			Interface string `json:"interface"`
-			ID        string `json:"id"`
-		} `json:"endpoints"`
-		Type string `json:"type"`
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"catalog"`
-	ApplicationCredentialRestricted bool `json:"application_credential_restricted"`
-	User                            struct {
-		PasswordExpiresAt interface{} `json:"password_expires_at"`
-		Domain            struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"domain"`
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"user"`
-	AuditIDs []string  `json:"audit_ids"`
-	IssuedAt time.Time `json:"issued_at"`
+	IsDomain                        bool                   `json:"is_domain"`
+	Methods                         []string               `json:"methods"`
+	Roles                           []TokenMetadataRole    `json:"roles"`
+	ExpiresAt                       time.Time              `json:"expires_at"`
+	Project                         TokenMetadataProject   `json:"project"`
+	Catalog                         []TokenMetadataCatalog `json:"catalog"`
+	ApplicationCredentialRestricted bool                   `json:"application_credential_restricted"`
+	User                            TokenMetadataUser      `json:"user"`
+	AuditIDs                        []string               `json:"audit_ids"`
+	IssuedAt                        time.Time              `json:"issued_at"`
 }
 
-// obtain a token using an application credential
-// https://docs.openstack.org/api-ref/identity/v3/?expanded=authenticating-with-an-application-credential-detail#authenticating-with-an-application-credential
-func obtainTokenWithAppCred(baseURL, appCredID, appCredSecret string) (string, TokenMetadata, error) {
-	payload := map[string]interface{}{
-		"auth": map[string]interface{}{
-			"identity": map[string]interface{}{
-				"methods": []string{
-					"application_credential",
-				},
-				"application_credential": map[string]string{
-					"id":     appCredID,
-					"secret": appCredSecret,
-				},
-			},
-		},
-	}
-	return makeAuthRequest(baseURL, payload)
+type TokenMetadataRole struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
-func makeAuthRequest(baseURL string, payload map[string]interface{}) (token string, tokenMetadata TokenMetadata, err error) {
-	var reqBody bytes.Buffer
-	err = json.NewEncoder(&reqBody).Encode(payload)
-	if err != nil {
-		return "", TokenMetadata{}, err
-	}
-	url, err := neturl.Parse(baseURL)
-	if err != nil {
-		return "", TokenMetadata{}, err
-	}
-	url.Path = path.Join(url.Path, "/auth/tokens")
-	req, err := http.NewRequest(http.MethodPost, url.String(), &reqBody)
-	if err != nil {
-		return "", TokenMetadata{}, err
-	}
-	resp, err := makeHTTPRequestWithRetry(req)
-	if err != nil {
-		return "", TokenMetadata{}, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err = fmt.Errorf("%s, %s", resp.Status, url)
-		return "", TokenMetadata{}, err
-	}
-	token, err = extractTokenFromAuthResponse(resp)
-	if err != nil {
-		return "", TokenMetadata{}, err
-	}
-	tokenMetadata, err = extractTokenMetadataFromAuthResponse(resp)
-	if err != nil {
-		return "", TokenMetadata{}, err
-	}
-	return token, tokenMetadata, nil
+type TokenMetadataProject struct {
+	Domain Domain `json:"domain"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
 }
 
-func extractTokenFromAuthResponse(resp *http.Response) (string, error) {
-	token := resp.Header.Get("X-Subject-Token")
-	if token == "" {
-		return "", fmt.Errorf("token not in header")
-	}
-	return token, nil
+type TokenMetadataCatalog struct {
+	Endpoints []struct {
+		RegionID  string `json:"region_id"`
+		URL       string `json:"url"`
+		Region    string `json:"region"`
+		Interface string `json:"interface"`
+		ID        string `json:"id"`
+	} `json:"endpoints"`
+	Type string `json:"type"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
-func extractTokenMetadataFromAuthResponse(resp *http.Response) (TokenMetadata, error) {
-	var respBody struct {
-		TokenMetadata TokenMetadata `json:"token"`
+type TokenMetadataUser struct {
+	PasswordExpiresAt interface{} `json:"password_expires_at"`
+	Domain            Domain      `json:"domain"`
+	ID                string      `json:"id"`
+	Name              string      `json:"name"`
+}
+
+type Domain struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func obtainToken(provider *gophercloud.ProviderClient) (string, TokenMetadata, error) {
+	identityClient, err := openstack.NewIdentityV3(provider, gophercloud.EndpointOpts{})
+	if err != nil {
+		return "", TokenMetadata{}, err
 	}
-	err := json.NewDecoder(resp.Body).Decode(&respBody)
+	metadata, err := authResultToTokenMetadata(provider.GetAuthResult(), identityClient)
+	if err != nil {
+		return "", TokenMetadata{}, err
+	}
+	return provider.Token(), metadata, nil
+}
+
+func authResultToTokenMetadata(authResult gophercloud.AuthResult, client *gophercloud.ServiceClient) (TokenMetadata, error) {
+	switch result := authResult.(type) {
+	case tokensv3.CreateResult:
+		return extractTokenMetadataFromAuthResult(result)
+	case tokensv3.GetResult:
+		return extractTokenMetadataFromAuthResult(result)
+	default:
+		res := tokensv3.Get(client, client.ProviderClient.TokenID)
+		if res.Err != nil {
+			return TokenMetadata{}, res.Err
+		}
+		return extractTokenMetadataFromAuthResult(res)
+	}
+}
+
+// implement by tokensv3.CreateResult and tokensv3.GetResult
+type iAuthResult interface {
+	ExtractTokenID() (string, error)
+	ExtractServiceCatalog() (*tokensv3.ServiceCatalog, error)
+	ExtractUser() (*tokensv3.User, error)
+	ExtractRoles() ([]tokensv3.Role, error)
+	ExtractProject() (*tokensv3.Project, error)
+	ExtractDomain() (*tokensv3.Domain, error)
+}
+
+func extractTokenMetadataFromAuthResult(result iAuthResult) (TokenMetadata, error) {
+	user, err := result.ExtractUser()
 	if err != nil {
 		return TokenMetadata{}, err
 	}
-	resp.Body.Close()
-	return respBody.TokenMetadata, nil
+	project, err := result.ExtractProject()
+	if err != nil {
+		return TokenMetadata{}, err
+	}
+	return TokenMetadata{
+		Roles: nil,
+		Project: TokenMetadataProject{
+			Domain: Domain{
+				ID:   project.Domain.ID,
+				Name: project.Domain.Name,
+			},
+			ID:   project.ID,
+			Name: project.Name,
+		},
+		ApplicationCredentialRestricted: false,
+		User: TokenMetadataUser{
+			PasswordExpiresAt: nil,
+			Domain: Domain{
+				ID:   user.Domain.ID,
+				Name: user.Domain.Name,
+			},
+			ID:   user.ID,
+			Name: user.Name,
+		},
+	}, nil
 }

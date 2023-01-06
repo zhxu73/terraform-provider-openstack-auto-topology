@@ -6,6 +6,7 @@ require (
 	github.com/gophercloud/gophercloud v1.0.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.13.0
 	github.com/kelseyhightower/envconfig v1.4.0
+	github.com/mitchellh/mapstructure v1.4.3
 	github.com/sirupsen/logrus v1.4.1
 )
 
@@ -35,7 +36,6 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.0 // indirect
-	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect

@@ -3,6 +3,10 @@ package openstack
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gophercloud/gophercloud"
+	"github.com/gophercloud/gophercloud/openstack"
+	"github.com/gophercloud/gophercloud/openstack/identity/v3/catalog"
+	"github.com/mitchellh/mapstructure"
 	"io"
 	"net/http"
 	neturl "net/url"
@@ -12,10 +16,11 @@ import (
 
 // Client is base client for OpenStack API
 type Client struct {
-	appCred        ApplicationCredential
+	credEnv        CredentialEnv
 	token          string
 	tokenMetadata  TokenMetadata
 	catalogEntries []CatalogEntry
+	provider       *gophercloud.ProviderClient
 }
 
 // NewClient creates a new Client
@@ -24,68 +29,25 @@ func NewClient() Client {
 }
 
 // Auth authenticate with OpenStack API using an application credential
-func (c *Client) Auth(appCred ApplicationCredential) error {
-	err := c.checkCred(appCred)
+func (c *Client) Auth(credEnv CredentialEnv) error {
+	opts, err := openstack.AuthOptionsFromEnv()
 	if err != nil {
 		return err
 	}
-	token, metadata, err := obtainTokenWithAppCred(appCred.AuthURL, appCred.ApplicationCredentialID, appCred.ApplicationCredentialSecret)
+
+	provider, err := openstack.AuthenticatedClient(opts)
 	if err != nil {
 		return err
 	}
-	catalogEntries, err := c.getCatalog(appCred.AuthURL, token)
+	token, metadata, err := obtainToken(provider)
 	if err != nil {
 		return err
 	}
+	c.provider = provider
 	c.tokenMetadata = metadata
-	c.catalogEntries = catalogEntries
 	c.token = token
-	c.appCred = appCred
+	c.credEnv = credEnv
 	return nil
-}
-
-func (c *Client) checkCred(appCred ApplicationCredential) error {
-	if appCred.AuthURL == "" {
-		return fmt.Errorf("OS_AUTH_URL missing")
-	}
-	if appCred.ApplicationCredentialID == "" {
-		return fmt.Errorf("OS_APPLICATION_CREDENTIAL_ID missing")
-	}
-	if appCred.ApplicationCredentialSecret == "" {
-		return fmt.Errorf("OS_APPLICATION_CREDENTIAL_SECRET missing")
-	}
-	return nil
-}
-
-// get a list of catalogs
-// https://docs.openstack.org/api-ref/identity/v3/?expanded=get-service-catalog-detail#get-service-catalog
-func (c *Client) getCatalog(baseURL string, token string) ([]CatalogEntry, error) {
-	url, err := neturl.Parse(baseURL)
-	if err != nil {
-		return nil, err
-	}
-	url.Path = path.Join(url.Path, "/auth/catalog")
-	resp, err := makeRequest(http.MethodGet, url.String(), token, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var respBody struct {
-		Catalog []CatalogEntry `json:"catalog"`
-		Links   struct {
-			Self     string      `json:"self"`
-			Previous interface{} `json:"previous"`
-			Next     interface{} `json:"next"`
-		} `json:"links"`
-	}
-	err = json.NewDecoder(resp.Body).Decode(&respBody)
-	if err != nil {
-		return nil, err
-	}
-	if len(respBody.Catalog) == 0 {
-		return nil, fmt.Errorf("no catalog entries")
-	}
-	return respBody.Catalog, nil
 }
 
 // Network returns a NetworkClient for a region.
@@ -95,14 +57,18 @@ func (c *Client) Network(regionName string) (*NetworkClient, error) {
 		return nil, fmt.Errorf("token not set")
 	}
 	if regionName == "" {
-		regionName = c.appCred.RegionName
+		regionName = c.credEnv.RegionName
 	}
-	networkEndpoint, err := findEndpoint(c.catalogEntries, "network", regionName, c.appCred.Interface)
+	identityClient, err := openstack.NewIdentityV3(c.provider, gophercloud.EndpointOpts{})
+	if err != nil {
+		return nil, err
+	}
+	entry, err := findNeutronCatalogEntry(identityClient, regionName, c.credEnv.Interface)
 	if err != nil {
 		return nil, err
 	}
 	return &NetworkClient{
-		baseURL:       networkEndpoint.URL,
+		baseURL:       entry.URL,
 		token:         c.token,
 		tokenMetadata: c.tokenMetadata,
 	}, nil
@@ -115,7 +81,7 @@ func (c *Client) CurrentProject() (id string, name string) {
 
 // LookupProjectByName looks up the ID of a project by its name
 func (c *Client) LookupProjectByName(projectName string) (id string) {
-	url, err := neturl.Parse(c.appCred.AuthURL)
+	url, err := neturl.Parse(c.credEnv.AuthURL)
 	if err != nil {
 		return ""
 	}
@@ -156,6 +122,41 @@ func (c *Client) LookupProjectByName(projectName string) (id string) {
 		}
 	}
 	return ""
+}
+
+func findNeutronCatalogEntry(identityClient *gophercloud.ServiceClient, regionName, interfaceName string) (CatalogEndpoint, error) {
+	catalogList := catalog.List(identityClient)
+	page, err := catalogList.AllPages()
+	if err != nil {
+		return CatalogEndpoint{}, err
+	}
+	empty, err := page.IsEmpty()
+	if err != nil {
+		return CatalogEndpoint{}, err
+	}
+	if empty {
+		return CatalogEndpoint{}, fmt.Errorf("catalog is empty")
+	}
+	var respBody struct {
+		Catalog []CatalogEntry `json:"catalog"`
+		Links   struct {
+			Self     string      `json:"self"`
+			Previous interface{} `json:"previous"`
+			Next     interface{} `json:"next"`
+		} `json:"links"`
+	}
+	err = mapstructure.Decode(page.GetBody(), &respBody)
+	if err != nil {
+		return CatalogEndpoint{}, err
+	}
+	if len(respBody.Catalog) == 0 {
+		return CatalogEndpoint{}, fmt.Errorf("no catalog entries")
+	}
+	endpoint, err := findEndpoint(respBody.Catalog, "network", regionName, interfaceName)
+	if err != nil {
+		return CatalogEndpoint{}, err
+	}
+	return endpoint, nil
 }
 
 func findEndpoint(catalogEntries []CatalogEntry, serviceType, regionName, interfaceName string) (CatalogEndpoint, error) {

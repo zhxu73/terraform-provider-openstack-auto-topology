@@ -26,7 +26,7 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 	var diags diag.Diagnostics
 
 	osClient := openstack.NewClient()
-	appCred, err := loadApplicationCredentialFromEnv()
+	appCred, err := loadCredentialFromEnv()
 	if err != nil {
 		return nil, diag.FromErr(err)
 	}
@@ -38,11 +38,11 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 	return osClient, diags
 }
 
-func loadApplicationCredentialFromEnv() (openstack.ApplicationCredential, error) {
-	var appCred openstack.ApplicationCredential
-	err := envconfig.Process("", &appCred)
+func loadCredentialFromEnv() (openstack.CredentialEnv, error) {
+	var cred openstack.CredentialEnv
+	err := envconfig.Process("", &cred)
 	if err != nil {
-		return openstack.ApplicationCredential{}, fmt.Errorf("fail to load application credential from environment variables, %w", err)
+		return openstack.CredentialEnv{}, fmt.Errorf("fail to load application credential from environment variables, %w", err)
 	}
-	return appCred, nil
+	return cred, nil
 }
