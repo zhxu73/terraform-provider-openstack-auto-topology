@@ -56,7 +56,10 @@ func dataSourceAutoAllocatedTopologyRead(ctx context.Context, d *schema.Resource
 	if err != nil {
 		return addErrorDiagnostic(diags, err)
 	}
-	projectID := getProjectID(d, &osClient)
+	projectID, err := getProjectID(d, &osClient)
+	if err != nil {
+		return addErrorDiagnostic(diags, err)
+	}
 	if projectID == "" {
 		return addErrorDiagnostic(diags, fmt.Errorf("cannot obtain project ID"))
 	}
@@ -85,20 +88,17 @@ func dataSourceAutoAllocatedTopologyRead(ctx context.Context, d *schema.Resource
 // - project_id if user specified it
 // - project_name if user specified it
 // - current project associated with the credential, which may not exists (e.g. unscoped credential)
-func getProjectID(d *schema.ResourceData, osClient *openstack.Client) string {
+func getProjectID(d *schema.ResourceData, osClient *openstack.Client) (string, error) {
 	projectID := getProjectIDFromResourceData(d)
 	if projectID != "" {
-		return projectID
+		return projectID, nil
 	}
 	projectName := getProjectNameFromResourceData(d)
 	if projectName != "" {
-		projectID = osClient.LookupProjectByName(projectName)
-		if projectID != "" {
-			return projectID
-		}
+		return osClient.LookupProjectByName(projectName)
 	}
 	projectID, _ = osClient.CurrentProject()
-	return projectID
+	return projectID, nil
 }
 
 func getProjectIDFromResourceData(d *schema.ResourceData) string {

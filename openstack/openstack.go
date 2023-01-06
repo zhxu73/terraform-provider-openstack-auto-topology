@@ -1,16 +1,14 @@
 package openstack
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/identity/v3/catalog"
+	"github.com/gophercloud/gophercloud/openstack/identity/v3/users"
 	"github.com/mitchellh/mapstructure"
 	"io"
 	"net/http"
-	neturl "net/url"
-	"path"
 	"time"
 )
 
@@ -80,17 +78,20 @@ func (c *Client) CurrentProject() (id string, name string) {
 }
 
 // LookupProjectByName looks up the ID of a project by its name
-func (c *Client) LookupProjectByName(projectName string) (id string) {
-	url, err := neturl.Parse(c.credEnv.AuthURL)
+// https://docs.openstack.org/api-ref/identity/v3/index.html?expanded=list-projects-for-user-detail#list-projects-for-user
+func (c *Client) LookupProjectByName(projectName string) (id string, err error) {
+	identityClient, err := openstack.NewIdentityV3(c.provider, gophercloud.EndpointOpts{})
 	if err != nil {
-		return ""
+		return "", err
 	}
-	url.Path = path.Join(url.Path, "users", c.tokenMetadata.User.ID, "projects")
-	resp, err := makeRequest(http.MethodGet, url.String(), c.token, nil)
+	list, err := users.ListProjects(identityClient, c.tokenMetadata.User.ID).AllPages()
 	if err != nil {
-		return ""
+		return "", err
 	}
-	defer resp.Body.Close()
+	if empty, err := list.IsEmpty(); err != nil || empty {
+		return "", fmt.Errorf("%w", err)
+	}
+
 	var respBody struct {
 		Projects []struct {
 			ID          string                 `json:"id"`
@@ -112,16 +113,17 @@ func (c *Client) LookupProjectByName(projectName string) (id string) {
 			Previous interface{} `json:"previous"`
 		} `json:"links"`
 	}
-	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	err = mapstructure.Decode(list.GetBody(), &respBody)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	for _, project := range respBody.Projects {
 		if project.Name == projectName {
-			return project.ID
+			// return the first found
+			return project.ID, nil
 		}
 	}
-	return ""
+	return "", fmt.Errorf("project %s not found", projectName)
 }
 
 func findNeutronCatalogEntry(identityClient *gophercloud.ServiceClient, regionName, interfaceName string) (CatalogEndpoint, error) {
