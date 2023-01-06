@@ -16,28 +16,7 @@ func resourceAutoAllocatedTopology() *schema.Resource {
 		UpdateContext: resourceAutoAllocatedTopologyUpdate,
 		DeleteContext: resourceAutoAllocatedTopologyDelete,
 		SchemaVersion: 1,
-		Schema: map[string]*schema.Schema{
-			topologyIDAttribute: {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "network ID of the auto allocated topology",
-			},
-			projectIDAttribute: {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "project ID of the auto allocated topology",
-			},
-			projectNameAttribute: {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "project name of the auto allocated topology",
-			},
-			regionNameAttribute: {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "region name of the auto allocated topology",
-			},
-		},
+		Schema:        autoAllocatedTopologySchema,
 	}
 }
 

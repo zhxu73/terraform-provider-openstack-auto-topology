@@ -15,33 +15,35 @@ const (
 	regionNameAttribute  = "region_name"
 )
 
+var autoAllocatedTopologySchema = map[string]*schema.Schema{
+	topologyIDAttribute: {
+		Type:        schema.TypeString,
+		Computed:    true,
+		Description: "network ID of the auto allocated topology",
+	},
+	projectIDAttribute: {
+		Type:        schema.TypeString,
+		Optional:    true,
+		Description: "project ID of the auto allocated topology",
+	},
+	projectNameAttribute: {
+		Type:        schema.TypeString,
+		Optional:    true,
+		Description: "project name of the auto allocated topology",
+	},
+	regionNameAttribute: {
+		Type:        schema.TypeString,
+		Optional:    true,
+		Description: "region name of the auto allocated topology",
+	},
+}
+
 func dataSourceAutoAllocatedTopology() *schema.Resource {
 	return &schema.Resource{
 		Description:   "Use this data source to get the auto allocated topology of current project",
 		ReadContext:   dataSourceAutoAllocatedTopologyRead,
 		SchemaVersion: 1,
-		Schema: map[string]*schema.Schema{
-			topologyIDAttribute: {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "network ID of the auto allocated topology",
-			},
-			projectIDAttribute: {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "project ID of the auto allocated topology",
-			},
-			projectNameAttribute: {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "project name of the auto allocated topology",
-			},
-			regionNameAttribute: {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "region name of the auto allocated topology",
-			},
-		},
+		Schema:        autoAllocatedTopologySchema,
 	}
 }
 
@@ -51,8 +53,9 @@ func dataSourceAutoAllocatedTopologyRead(ctx context.Context, d *schema.Resource
 
 	// from return value of providerConfigure()
 	osClient := m.(openstack.Client)
+	regionName := getRegionName(d, &osClient)
 
-	networkClient, err := osClient.Network(getRegionNameFromResourceData(d))
+	networkClient, err := osClient.Network(regionName)
 	if err != nil {
 		return addErrorDiagnostic(diags, err)
 	}
@@ -117,6 +120,17 @@ func getProjectNameFromResourceData(d *schema.ResourceData) string {
 		return ""
 	}
 	return projectName
+}
+
+// Look up region name use the following hierarchy:
+// - region_name if user specified it
+// - current region name associated with the credential, which may not exists
+func getRegionName(d *schema.ResourceData, osClient *openstack.Client) string {
+	regionName := getRegionNameFromResourceData(d)
+	if regionName != "" {
+		return regionName
+	}
+	return osClient.CurrentRegion()
 }
 
 func getRegionNameFromResourceData(d *schema.ResourceData) string {

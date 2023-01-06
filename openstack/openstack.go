@@ -78,6 +78,11 @@ func (c *Client) CurrentProject() (id string, name string) {
 	return c.tokenMetadata.Project.ID, c.tokenMetadata.Project.Name
 }
 
+// CurrentRegion returns the current region specified in credential via environment variables
+func (c *Client) CurrentRegion() (name string) {
+	return c.credEnv.RegionName
+}
+
 // LookupProjectByName looks up the ID of a project by its name
 // https://docs.openstack.org/api-ref/identity/v3/index.html?expanded=list-projects-for-user-detail#list-projects-for-user
 func (c *Client) LookupProjectByName(projectName string) (id string, err error) {
