@@ -1,7 +1,9 @@
 terraform {
   required_providers {
     openstack-auto-topology = {
-      source  = "terraform.cyverse.org/cyverse/openstack-auto-topology"
+      #source  = "terraform.cyverse.org/cyverse/openstack-auto-topology" # use this source if you install this provider locally using the Makefile
+      source = "zhxu73/openstack-auto-topology"
+      version = "0.1.0"
     }
     openstack = {
       source = "terraform-provider-openstack/openstack"
